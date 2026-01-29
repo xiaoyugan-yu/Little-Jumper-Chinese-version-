@@ -1,0 +1,718 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>小跳跃者 — 升级版（更多关卡、动画、BGM 与道具）</title>
+  <style>
+    :root{
+      --ui-bg: rgba(8,10,15,0.82);
+      --accent: #ffd166;
+      --muted: #9aa5b1;
+      --font: "PingFang SC", "Microsoft Yahei", Arial, sans-serif;
+    }
+    html,body{height:100%;margin:0;background:#071026;color:#eaf2ff;font-family:var(--font);}
+    #game-wrap{display:flex;align-items:center;justify-content:center;height:100%;padding:12px;box-sizing:border-box;}
+    canvas{background:linear-gradient(#6fc3ff,#07203a);border-radius:12px;box-shadow:0 10px 40px rgba(0,0,0,0.6);display:block;}
+    .ui{position:absolute;left:0;right:0;top:0;bottom:0;pointer-events:none;display:flex;align-items:flex-start;justify-content:center;}
+    .panel{pointer-events:auto;margin-top:28px;background:var(--ui-bg);padding:12px 16px;border-radius:10px;min-width:320px;max-width:920px;color:#fff;}
+    h1{margin:0 0 6px 0;font-size:20px;}
+    .muted{color:var(--muted);font-size:13px;}
+    .row{display:flex;gap:8px;align-items:center;margin-top:8px;}
+    button, .btn{background:linear-gradient(180deg,#ffd166,#ffb703);color:#122;border:0;padding:8px 12px;border-radius:8px;font-weight:700;cursor:pointer;box-shadow:0 4px 0 rgba(0,0,0,0.15);}
+    .ghost{background:transparent;color:var(--accent);border:1px solid rgba(255,209,102,0.12);box-shadow:none;}
+    .small{font-size:13px;padding:6px 8px;border-radius:6px;}
+    .hud{position:absolute;top:12px;left:12px;pointer-events:none;background:rgba(3,5,8,0.45);padding:8px 10px;border-radius:8px;color:#fff;}
+    .hud .score{font-weight:800;font-size:18px;}
+    .right-hud{position:absolute;top:12px;right:12px;pointer-events:auto;display:flex;gap:8px;align-items:center;}
+    .touch{position:absolute;bottom:18px;left:18px;right:18px;pointer-events:none;display:flex;justify-content:space-between;align-items:flex-end;}
+    .controls{pointer-events:auto;display:flex;gap:8px;align-items:center;}
+    .circle{width:64px;height:64px;border-radius:50%;background:rgba(255,255,255,0.06);display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;box-shadow:inset 0 -4px 0 rgba(0,0,0,0.2);user-select:none;}
+    @media (max-width:720px){canvas{width:96vw;height:64vh;max-height:720px;} .panel{min-width:92vw;margin-top:8px;} .circle{width:72px;height:72px;}}
+    .stat{font-size:13px;color:var(--muted);margin-left:8px;}
+  </style>
+</head>
+<body>
+  <div id="game-wrap">
+    <canvas id="game" width="1024" height="576"></canvas>
+
+    <div class="ui">
+      <div id="menu" class="panel" style="display:block;">
+        <h1>小跳跃者 — 升级版</h1>
+        <div class="muted">更多关卡、角色动画、背景音乐、道具与移动平台 — 中文界面</div>
+        <div class="row">
+          <button id="startBtn">开始游戏</button>
+          <button id="levelBtn" class="ghost">选择关卡</button>
+          <button id="tutorialBtn" class="ghost">操作说明</button>
+        </div>
+        <div class="row">
+          <div class="muted">最高分：</div>
+          <div id="best" style="font-weight:800;margin-left:8px;">0</div>
+          <div class="stat" id="meta">关卡: 6 · 道具: 加速/双跳回复/护盾/宝石</div>
+        </div>
+        <div class="row">
+          <label class="muted">音效</label>
+          <button id="soundToggle" class="small">开启</button>
+          <label class="muted" style="margin-left:6px;">BGM</label>
+          <button id="musicToggle" class="small">开启</button>
+        </div>
+        <div class="row">
+          <div class="muted">进阶提示：</div>
+          <div class="muted" style="margin-left:6px;">撞敌从上方可消灭，护盾可抵一次伤害，宝石分值更高。</div>
+        </div>
+      </div>
+
+      <div id="levelMenu" class="panel" style="display:none;">
+        <h1>选择关卡</h1>
+        <div class="row" id="levelsList"></div>
+        <div class="row"><button id="backFromLevel" class="ghost">返回</button></div>
+      </div>
+
+      <div id="tutorial" class="panel" style="display:none;">
+        <h1>操作说明</h1>
+        <div class="muted">键盘：</div>
+        <div class="muted">← / → 或 A / D 移动，↑ 或 空格 / W 跳跃。触控：左/右/跳跃 圆钮。</div>
+        <div class="muted">道具：</div>
+        <div class="muted">B=加速（短时移动更快） D=双跳补充 H=护盾（抵一次敌人/陷阱） G=宝石（高分）</div>
+        <div class="row" style="margin-top:8px;"><button id="backFromTut" class="ghost">返回</button></div>
+      </div>
+
+      <div id="popup" class="panel" style="display:none; position:relative;">
+        <h1 id="popupTitle">你赢了！</h1>
+        <div class="muted" id="popupMsg"></div>
+        <div class="row" style="margin-top:12px;">
+          <button id="nextBtn">下一关</button>
+          <button id="retryBtn" class="ghost">重试</button>
+          <button id="menuBtn" class="ghost">主菜单</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="hud" id="hud" style="display:none;">
+      <div>关卡 <span id="hudLevel">1</span></div>
+      <div class="score">分数 <span id="hudScore">0</span></div>
+      <div class="muted" style="font-size:12px;margin-top:6px;">道具: <span id="hudItems">无</span></div>
+    </div>
+
+    <div class="right-hud" style="top:12px;right:12px;">
+      <button id="pauseBtn" class="ghost small" style="display:none;">暂停</button>
+    </div>
+
+    <div class="touch" id="touch" style="display:none;">
+      <div class="controls" id="touchLeft">
+        <div class="circle" id="leftBtn">◀</div>
+        <div class="circle" id="rightBtn">▶</div>
+      </div>
+      <div class="controls">
+        <div class="circle" id="jumpBtn">跳</div>
+      </div>
+    </div>
+
+  </div>
+
+<script>
+/*
+  小跳跃者 — 升级实现说明（index.html 单文件）
+  新增要点：
+  - 更多关卡（6 关示例）
+  - 玩家多帧动画（idle/run/jump，通过切换 SVG 帧实现）
+  - 背景音乐（简单 WebAudio 循环序列），可开关
+  - 新道具：加���(B)、双跳回复(D)、护盾(H)、宝石(G)
+  - 移动平台(M) 与可推动的物体（简单平台随玩家一起移动）
+  - 物理增强：缓冲跳（jumpBuffer）、落地容错（coyoteTime）、颗粒特效
+*/
+
+// ============ 基本设置 ============
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
+const W = canvas.width, H = canvas.height;
+let lastTime = 0;
+let soundOn = true, musicOn = true;
+const TILE = 48;
+
+// UI
+const menu = document.getElementById('menu');
+const levelMenu = document.getElementById('levelMenu');
+const tutorial = document.getElementById('tutorial');
+const popup = document.getElementById('popup');
+const hud = document.getElementById('hud');
+const touchUI = document.getElementById('touch');
+
+const hudLevel = document.getElementById('hudLevel');
+const hudScore = document.getElementById('hudScore');
+const hudItems = document.getElementById('hudItems');
+const bestEl = document.getElementById('best');
+
+// 控制按钮
+document.getElementById('startBtn').onclick = ()=>startLevel(0);
+document.getElementById('levelBtn').onclick = ()=>showLevelMenu();
+document.getElementById('tutorialBtn').onclick = ()=>{menu.style.display='none'; tutorial.style.display='block';};
+document.getElementById('backFromTut').onclick = ()=>{ tutorial.style.display='none'; menu.style.display='block'; };
+document.getElementById('soundToggle').onclick = toggleSound;
+document.getElementById('musicToggle').onclick = toggleMusic;
+document.getElementById('backFromLevel').onclick = ()=>{ levelMenu.style.display='none'; menu.style.display='block'; };
+document.getElementById('retryBtn').onclick = ()=>{ popup.style.display='none'; startLevel(game.levelIndex); };
+document.getElementById('menuBtn').onclick = ()=>{ popup.style.display='none'; showMenu(); };
+document.getElementById('nextBtn').onclick = ()=>{ popup.style.display='none'; startLevel(game.levelIndex+1); };
+
+// 触控按钮事件
+['leftBtn','rightBtn','jumpBtn'].forEach(id=>{
+  const el = document.getElementById(id);
+  el.addEventListener('touchstart', (e)=>{ e.preventDefault(); input.touch[id]=true; }, {passive:false});
+  el.addEventListener('touchend', (e)=>{ e.preventDefault(); input.touch[id]=false; }, {passive:false});
+  el.addEventListener('mousedown', ()=>input.touch[id]=true);
+  el.addEventListener('mouseup', ()=>input.touch[id]=false);
+  el.addEventListener('mouseleave', ()=>input.touch[id]=false);
+});
+
+// ============ 资源与美术（多帧） ============
+const art = { playerFrames: [] };
+function svgToImg(svgText){ const img=new Image(); img.src='data:image/svg+xml;utf8,'+encodeURIComponent(svgText); return img; }
+
+function createArts(){
+  // 多帧玩家： idle, run1, run2, jump, hurt
+  art.playerFrames.push(svgToImg(`<svg xmlns='http://www.w3.org/2000/svg' width='64' height='64'><rect width='64' height='64' rx='8' fill='#081426'/><circle cx='32' cy='22' r='10' fill='#ffd166'/><rect x='22' y='34' width='20' height='18' rx='4' fill='#ffd166'/></svg>`));
+  art.playerFrames.push(svgToImg(`<svg xmlns='http://www.w3.org/2000/svg' width='64' height='64'><rect width='64' height='64' rx='8' fill='#081426'/><circle cx='32' cy='20' r='10' fill='#ffd166'/><rect x='18' y='36' width='28' height='16' rx='3' fill='#ffd166'/></svg>`));
+  art.playerFrames.push(svgToImg(`<svg xmlns='http://www.w3.org/2000/svg' width='64' height='64'><rect width='64' height='64' rx='8' fill='#081426'/><circle cx='32' cy='18' r='10' fill='#ffd166'/><rect x='20' y='36' width='24' height='16' rx='3' fill='#ffd166' transform='skewX(-8)'/></svg>`));
+  art.playerFrames.push(svgToImg(`<svg xmlns='http://www.w3.org/2000/svg' width='64' height='64'><rect width='64' height='64' rx='8' fill='#081426'/><circle cx='32' cy='14' r='10' fill='#ffd166'/><rect x='22' y='36' width='20' height='16' rx='3' fill='#ffd166'/></svg>`));
+  // coin / gem / enemy / flag / spike / tile / powerups
+  art.coin = svgToImg(`<svg xmlns='http://www.w3.org/2000/svg' width='32' height='32'><circle cx='16' cy='16' r='12' fill='#ffdd57' stroke='#ff9f1c' stroke-width='2'/></svg>`);
+  art.gem = svgToImg(`<svg xmlns='http://www.w3.org/2000/svg' width='28' height='28'><polygon points='14,2 26,12 14,26 2,12' fill='#7bf1a8'/></svg>`);
+  art.enemy = svgToImg(`<svg xmlns='http://www.w3.org/2000/svg' width='40' height='28'><rect width='40' height='28' rx='4' fill='#ff6b6b'/></svg>`);
+  art.flag = svgToImg(`<svg xmlns='http://www.w3.org/2000/svg' width='36' height='48'><rect x='6' y='4' width='4' height='40' fill='#2b2d42'/><rect x='12' y='8' width='20' height='14' fill='#ffd166' rx='2'/></svg>`);
+  art.spike = svgToImg(`<svg xmlns='http://www.w3.org/2000/svg' width='48' height='24'><polygon points='0,24 8,4 16,24' fill='#b30000'/><polygon points='16,24 24,4 32,24' fill='#c80000'/><polygon points='32,24 40,4 48,24' fill='#b30000'/></svg>`);
+  art.tile = svgToImg(`<svg xmlns='http://www.w3.org/2000/svg' width='64' height='32'><rect width='64' height='32' rx='4' fill='#6b8f8f'/></svg>`);
+  art.power = {
+    B: svgToImg(`<svg xmlns='http://www.w3.org/2000/svg' width='28' height='28'><circle cx='14' cy='14' r='12' fill='#8ec5ff'/><text x='14' y='18' font-size='12' text-anchor='middle' fill='#07203a' font-family='Arial'>B</text></svg>`),
+    D: svgToImg(`<svg xmlns='http://www.w3.org/2000/svg' width='28' height='28'><circle cx='14' cy='14' r='12' fill='#ffd166'/><text x='14' y='18' font-size='12' text-anchor='middle' fill='#07203a' font-family='Arial'>D</text></svg>`),
+    H: svgToImg(`<svg xmlns='http://www.w3.org/2000/svg' width='28' height='28'><circle cx='14' cy='14' r='12' fill='#c7f9d2'/><text x='14' y='18' font-size='12' text-anchor='middle' fill='#07203a' font-family='Arial'>H</text></svg>`)
+  };
+}
+
+// ============ 声音（WebAudio）：效果与 BGM 简单序列器 ============
+const AudioCtx = window.AudioContext || window.webkitAudioContext;
+let audioCtx = null;
+function ensureAudio(){ if(!audioCtx) audioCtx = new AudioCtx(); }
+function playTone(freq, type='sine', time=0.08, vol=0.08){
+  if(!soundOn) return;
+  ensureAudio();
+  const o = audioCtx.createOscillator();
+  const g = audioCtx.createGain();
+  o.type = type; o.frequency.value = freq;
+  g.gain.value = vol;
+  o.connect(g); g.connect(audioCtx.destination);
+  o.start();
+  g.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + time);
+  o.stop(audioCtx.currentTime + time + 0.02);
+}
+function playJump(){ playTone(540,'sawtooth',0.12,0.09); }
+function playCoin(){ playTone(880,'triangle',0.12,0.08); }
+function playDie(){ playTone(140,'sine',0.28,0.12); }
+function playPower(type){ if(type==='B') playTone(720,'sawtooth',0.12,0.09); if(type==='D') playTone(920,'triangle',0.12,0.09); if(type==='H') playTone(520,'sine',0.12,0.08); }
+
+// BGM 简单循环（使用 scheduleLoop）
+let bgmInterval = null;
+function startBgm(){
+  if(!musicOn) return;
+  ensureAudio();
+  stopBgm();
+  const pattern = [440,0,523,0,659,0,0]; // 简单循环
+  let i=0;
+  bgmInterval = setInterval(()=>{
+    const n = pattern[i % pattern.length];
+    if(n) {
+      const o = audioCtx.createOscillator();
+      const g = audioCtx.createGain();
+      o.type='sine'; o.frequency.value = n;
+      g.gain.value = 0.03;
+      o.connect(g); g.connect(audioCtx.destination);
+      o.start();
+      g.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.25);
+      o.stop(audioCtx.currentTime + 0.26);
+    }
+    i++;
+  }, 300);
+}
+function stopBgm(){ if(bgmInterval){ clearInterval(bgmInterval); bgmInterval=null; } }
+function toggleMusic(){ musicOn = !musicOn; document.getElementById('musicToggle').textContent = musicOn ? '开启' : '关闭'; if(musicOn) startBgm(); else stopBgm(); }
+function toggleSound(){ soundOn = !soundOn; document.getElementById('soundToggle').textContent = soundOn ? '开启' : '关闭'; if(soundOn) ensureAudio(); }
+
+// ============ 输入（含触控） ============
+const input = { left:false, right:false, up:false, touch:{ leftBtn:false, rightBtn:false, jumpBtn:false }, jumpBuffer:0 };
+window.addEventListener('keydown', e=>{
+  if(e.key==='ArrowLeft'||e.key==='a') input.left=true;
+  if(e.key==='ArrowRight'||e.key==='d') input.right=true;
+  if(e.key==='ArrowUp'||e.key===' '||e.key==='w') { input.up=true; input.jumpBuffer = 0.12; }
+});
+window.addEventListener('keyup', e=>{
+  if(e.key==='ArrowLeft'||e.key==='a') input.left=false;
+  if(e.key==='ArrowRight'||e.key==='d') input.right=false;
+  if(e.key==='ArrowUp'||e.key===' '||e.key==='w') input.up=false;
+});
+
+// ============ 关卡地图（6 关示例），新增符号： G=宝石 B/D/H=道具 M=移动平台 S=起点 。
+// 简单手工设计 + 少许随机化
+const LEVELS = [
+`..............................
+..............................
+......C....G...#......C...F...
+....###......###..............
+.S..B......E......G.....C.....
+#######....#######........####
+..........................^^^.
+.............M........M.......
+##############################`, // 1
+
+`........................................
+..........C..B.......C....G.....#....F..
+....###.......#######.................^^
+.S.....E....G.......D....E....C.........
+#######....###########.....######...####
+.............M..................M.......
+.................^^^....................
+########################################`, //2
+
+`...................................
+....G.....#....C...#.....G.....F...
+...###......###.......###...........
+.S...E....B.....E...........D.......
+######....######....######....######
+...........C...............G.........
+.....^^^...........^^^^.............
+###################################`, //3
+
+`................................................
+..C.....C....G....#....B....C....G....#....F.....
+...###.......#######......###..............^^^...
+.S....E....D...E....G......E.....C.....E.........
+######....###########....######....#########...##
+.........M.............M..................G.....
+...................^^^......................^^^..
+################################################`, //4
+
+`.....................................
+....G..G....#....C....#..G....#....F..
+..##..###......###......###...........
+.S...E...B....E......D.....E..........
+#########....###########....##########
+......G....M....G.....M.....G..........
+....^^^............^^^........^^^......
+#####################################`, //5
+
+`..................................................
+..G....C....G....#....C....G....#....C....G....F...
+...###......###......###......###......###.........
+.S...E...E...B...D...H...E...E...G...E.....C.......
+###########....############....##############....##
+......G....M....G....M....G....M....G....M....G.....
+.....^^^...............^^^...............^^^........
+##################################################` //6
+];
+
+// ============ 生成关卡（解析更多对象） ============
+function makeLevel(mapStr){
+  const rows = mapStr.split('\n').map(r=>r.replace(/\r/g,''));
+  const h = rows.length;
+  const w = Math.max(...rows.map(r=>r.length));
+  const tiles = []; let playerStart={x:2,y:2};
+  const coins=[], gems=[], enemies=[], spikes=[], powerups=[], platforms=[];
+  let flag=null;
+  for(let y=0;y<h;y++){
+    const row = rows[y].padEnd(w,'.');
+    tiles[y]=[];
+    for(let x=0;x<w;x++){
+      const ch = row[x];
+      tiles[y][x]=ch;
+      const cx = x*TILE + TILE/2, cy = y*TILE + TILE/2;
+      if(ch==='S'){ playerStart={x:cx,y:cy}; tiles[y][x]='.';}
+      if(ch==='C'){ coins.push({x:cx,y:cy,got:false}); tiles[y][x]='.';}
+      if(ch==='G'){ gems.push({x:cx,y:cy,got:false}); tiles[y][x]='.';}
+      if(ch==='E'){ enemies.push({x:cx,y:cy,w:36,h:28,vx:(Math.random()>0.5?1:-1)*60}); tiles[y][x]='.';}
+      if(ch==='F'){ flag={x:cx,y:cy}; tiles[y][x]='.';}
+      if(ch==='^'){ spikes.push({x:x*TILE,y:y*TILE,w:TILE,h:TILE}); tiles[y][x]='.';}
+      if(ch==='B' || ch==='D' || ch==='H'){ powerups.push({x:cx,y:cy,type:ch,used:false}); tiles[y][x]='.';}
+      if(ch==='M'){ // 移动平台（水平往返 2 tile）
+        platforms.push({x:cx-24,y:cy,w:96,h:16,dir:1,range: TILE*2,originX:cx-24,vy:0, vx: 60*(Math.random()>0.5?1:-1)}); tiles[y][x]='.';}
+    }
+  }
+  return {tiles,w,h,playerStart,coins,gems,enemies,flag,spikes,powerups,platforms};
+}
+
+// ============ 全局游戏对象 ============
+let game = null;
+function newGame(){
+  game = { running:false, levelIndex:0, level:null, player:{x:0,y:0,w:40,h:44,vx:0,vy:0,onGround:false,canDoubleJump:true,shield:false,boostTime:0}, cam:{x:0,y:0}, score:0, lives:3, items:[] , particles:[] , playerAnim:{frame:0,frameTimer:0} };
+  loadBest();
+}
+
+// ============ 物理增强 ============
+// 小技巧：coyote time 和 jump buffer
+const GRAVITY = 1500;
+const COYOTE = 0.10; // 离地后可继续跳的时间
+const JUMP_BUFFER = 0.1;
+
+function tileAt(level, tx, ty){
+  if(ty<0||ty>=level.h||tx<0||tx>=level.w) return '#';
+  return level.tiles[ty][tx];
+}
+function aabb(a,b){ return !(a.x+a.w < b.x || a.x > b.x+b.w || a.y+a.h < b.y || a.y > b.y+b.h); }
+
+// 瓦片碰撞（略作调整以支持移动平台轴向分离）
+function resolveTileCollisions(player, level, dt){
+  const futureX = player.x + player.vx*dt;
+  const futureY = player.y + player.vy*dt;
+  let bbox = {x:futureX - player.w/2, y:futureY - player.h/2, w:player.w, h:player.h};
+  const minTx = Math.floor(bbox.x / TILE), maxTx = Math.floor((bbox.x + bbox.w) / TILE);
+  const minTy = Math.floor(bbox.y / TILE), maxTy = Math.floor((bbox.y + bbox.h) / TILE);
+
+  // 水平分离
+  player.x += player.vx*dt;
+  for(let ty=minTy; ty<=maxTy; ty++){
+    for(let tx=minTx; tx<=maxTx; tx++){
+      if(tileAt(level,tx,ty)==='#'){
+        const tileBox = {x:tx*TILE,y:ty*TILE,w:TILE,h:TILE};
+        const pBox = {x:player.x - player.w/2, y:player.y - player.h/2, w:player.w, h:player.h};
+        if(aabb(pBox,tileBox)){
+          if(player.vx>0) player.x = tileBox.x - player.w/2 - 0.001;
+          else if(player.vx<0) player.x = tileBox.x + tileBox.w + player.w/2 + 0.001;
+          player.vx = 0;
+        }
+      }
+    }
+  }
+
+  // 垂直
+  player.y += player.vy*dt;
+  player.prevOnGround = player.onGround;
+  player.onGround = false;
+  for(let ty=minTy; ty<=maxTy; ty++){
+    for(let tx=minTx; tx<=maxTx; tx++){
+      if(tileAt(level,tx,ty)==='#'){
+        const tileBox = {x:tx*TILE,y:ty*TILE,w:TILE,h:TILE};
+        const pBox = {x:player.x - player.w/2, y:player.y - player.h/2, w:player.w, h:player.h};
+        if(aabb(pBox,tileBox)){
+          if(player.vy>0){
+            player.y = tileBox.y - player.h/2 - 0.001; player.vy = 0; player.onGround = true; player.canDoubleJump = true;
+          } else if(player.vy<0){
+            player.y = tileBox.y + tileBox.h + player.h/2 + 0.001; player.vy = 0;
+          }
+        }
+      }
+    }
+  }
+}
+
+// ============ 粒子系统（用于金币、跳跃特效） ============
+function spawnParticles(x,y,color,count=10){
+  for(let i=0;i<count;i++){
+    const p = {x:x,y:y,vx:(Math.random()*2-1)*200, vy:-Math.random()*220-40, life:0.6 + Math.random()*0.6, col:color, r:2+Math.random()*2};
+    game.particles.push(p);
+  }
+}
+function updateParticles(dt){
+  for(let i=game.particles.length-1;i>=0;i--){
+    const p = game.particles[i];
+    p.vy += GRAVITY * dt * 0.2;
+    p.x += p.vx * dt; p.y += p.vy * dt;
+    p.life -= dt;
+    if(p.life<=0) game.particles.splice(i,1);
+  }
+}
+
+// ============ 主循环与渲染 ============
+function update(dt){
+  if(!game.running) return;
+  const lvl = game.level;
+  const p = game.player;
+
+  // 输入合并
+  const left = input.left || input.touch.leftBtn;
+  const right = input.right || input.touch.rightBtn;
+  const jumpPressed = (input.up || input.touch.jumpBtn) || input.jumpBuffer>0;
+
+  // 移动控制（支持短时加速）
+  const baseAcc = 1600;
+  const maxSpeed = 260;
+  let acc = baseAcc;
+  if(p.boostTime>0) acc *= 1.6;
+  if(left) p.vx -= acc*dt;
+  if(right) p.vx += acc*dt;
+  if(!left && !right) p.vx *= Math.pow(0.85, dt*60);
+  p.vx = Math.max(-maxSpeed, Math.min(maxSpeed, p.vx));
+
+  // 处理 jump buffer / coyote
+  if(input.jumpBuffer > 0) input.jumpBuffer -= dt;
+  if(p.onGround) p.coyote = COYOTE; else p.coyote = Math.max(0, (p.coyote||0) - dt);
+
+  if((input.up || input.touch.jumpBtn) && !p._jumpHeld) { input.jumpBuffer = JUMP_BUFFER; }
+  // 实际跳跃触发条件：有 jumpBuffer 且 (onGround or coyote or canDoubleJump)
+  if((input.jumpBuffer>0) && (p.onGround || p.coyote>0 || p.canDoubleJump)){
+    if(p.onGround || p.coyote>0){ p.vy = -520; p.canDoubleJump = true; }
+    else if(p.canDoubleJump){ p.vy = -460; p.canDoubleJump = false; }
+    p.onGround = false; p._jumpHeld = true; input.jumpBuffer = 0; playJump(); spawnParticles(p.x, p.y+12, '#ffd166', 8);
+  }
+  p._jumpHeld = input.up || input.touch.jumpBtn;
+
+  // 重力
+  p.vy += GRAVITY * dt;
+
+  // 平台移动
+  for(const pl of lvl.platforms){
+    pl.x += pl.vx * dt;
+    if(Math.abs(pl.x - pl.originX) > pl.range){ pl.vx *= -1; pl.x = pl.originX + Math.sign(pl.vx) * pl.range; }
+  }
+
+  // 碰撞
+  resolveTileCollisions(p, lvl, dt);
+
+  // 将玩家随移动平台移动（如果脚在平台上）
+  for(const pl of lvl.platforms){
+    const pBox = {x:p.x - p.w/2, y:p.y - p.h/2, w:p.w, h:p.h};
+    const plBox = {x:pl.x, y:pl.y, w:pl.w, h:pl.h};
+    if(aabb(pBox,plBox) && p.vy >= 0 && (p.y + p.h/2) <= (pl.y + 8)){
+      // 把玩家随平台移动
+      p.x += pl.vx * dt;
+      p.onGround = true;
+      p.canDoubleJump = true;
+    }
+  }
+
+  // 边界死亡
+  if(p.y > lvl.h*TILE + 240){ playerDie(); }
+
+  // 拾取金币 / 宝石 / 道具
+  for(const c of lvl.coins) if(!c.got){
+    const box = {x:c.x-14,y:c.y-14,w:28,h:28}; const pBox={x:p.x-p.w/2,y:p.y-p.h/2,w:p.w,h:p.h};
+    if(aabb(box,pBox)){ c.got=true; game.score += 10; hudScore.textContent = game.score; playCoin(); spawnParticles(c.x,c.y,'#ffdd57',12); }
+  }
+  for(const g of lvl.gems) if(!g.got){
+    const box = {x:g.x-14,y:g.y-14,w:28,h:28}; const pBox={x:p.x-p.w/2,y:p.y-p.h/2,w:p.w,h:p.h};
+    if(aabb(box,pBox)){ g.got=true; game.score += 50; hudScore.textContent = game.score; playTone(1100,'triangle',0.14,0.09); spawnParticles(g.x,g.y,'#7bf1a8',18); }
+  }
+  for(const pu of lvl.powerups) if(!pu.used){
+    const box = {x:pu.x-14,y:pu.y-14,w:28,h:28}; const pBox={x:p.x-p.w/2,y:p.y-p.h/2,w:p.w,h:p.h};
+    if(aabb(box,pBox)){
+      pu.used = true;
+      applyPower(pu.type);
+      playPower(pu.type);
+      spawnParticles(pu.x, pu.y, '#8ec5ff', 12);
+    }
+  }
+
+  // 敌人移动与碰撞
+  for(let i=lvl.enemies.length-1;i>=0;i--){
+    const e = lvl.enemies[i];
+    e.x += e.vx * dt;
+    // 边界检测（下方是否有地砖）
+    const aheadX = e.x + Math.sign(e.vx)*(e.w/2 + 4);
+    const belowX = Math.floor(aheadX / TILE), belowY = Math.floor((e.y + e.h/2 + 2) / TILE);
+    const tileBelow = tileAt(lvl, belowX, belowY);
+    const frontTile = tileAt(lvl, Math.floor(aheadX / TILE), Math.floor(e.y/TILE));
+    if(tileBelow === '.' || frontTile === '#') e.vx *= -1;
+    // 碰撞玩家
+    const eBox = {x:e.x-e.w/2,y:e.y-e.h/2,w:e.w,h:e.h};
+    const pBox = {x:p.x-p.w/2,y:p.y-p.h/2,w:p.w,h:p.h};
+    if(aabb(eBox,pBox)){
+      if(p.vy>0 && (p.y - p.h/2) < (e.y - e.h/4)){
+        lvl.enemies.splice(i,1); game.score += 30; hudScore.textContent = game.score; p.vy = -320; spawnParticles(e.x,e.y,'#ff6b6b',12); playCoin();
+      } else {
+        if(p.shield){ p.shield=false; playTone(300,'sine',0.18,0.12); } else playerDie();
+      }
+    }
+  }
+
+  // 尖刺
+  for(const s of lvl.spikes){
+    const sBox = {x:s.x,y:s.y,w:s.w,h:s.h}; const pBox={x:p.x-p.w/2,y:p.y-p.h/2,w:p.w,h:p.h};
+    if(aabb(sBox,pBox)){ if(p.shield){ p.shield=false; spawnParticles(p.x,p.y,'#c80000',12); } else playerDie(); }
+  }
+
+  // 到达旗帜判定
+  if(lvl.flag){
+    const fBox = {x:lvl.flag.x-12,y:lvl.flag.y-24,w:24,h:48}; const pBox={x:p.x-p.w/2,y:p.y-p.h/2,w:p.w,h:p.h};
+    if(aabb(fBox,pBox)){ levelComplete(); }
+  }
+
+  // 时间衰减道具
+  if(p.boostTime>0) p.boostTime = Math.max(0, p.boostTime - dt);
+
+  // 摄像机平滑
+  const camTargetX = Math.max(W/2, Math.min(lvl.w*TILE - W/2, p.x));
+  const camTargetY = Math.max(H/2, Math.min(lvl.h*TILE - H/2, p.y));
+  game.cam.x += (camTargetX - game.cam.x) * Math.min(1, dt*6);
+  game.cam.y += (camTargetY - game.cam.y) * Math.min(1, dt*6);
+
+  // 更新粒子
+  updateParticles(dt);
+
+  // 玩家动画更新
+  updatePlayerAnim(dt);
+}
+
+function updatePlayerAnim(dt){
+  const p = game.player;
+  const anim = game.playerAnim;
+  const speed = Math.abs(p.vx);
+  const onGround = p.onGround;
+  let frameCount = art.playerFrames.length;
+  if(!onGround) { anim.frame = 3; anim.frameTimer = 0; } // jump frame index 3
+  else {
+    if(speed < 10){ anim.frame = 0; anim.frameTimer = 0; }
+    else {
+      anim.frameTimer += dt;
+      if(anim.frameTimer > 0.12){ anim.frame = (anim.frame===1?2:1); anim.frameTimer = 0; }
+    }
+  }
+}
+
+// ============ 渲染 ============
+function draw(){
+  ctx.clearRect(0,0,W,H);
+  // 背景
+  const g = ctx.createLinearGradient(0,0,H,0); g.addColorStop(0,'#6fc3ff'); g.addColorStop(1,'#07203a');
+  ctx.fillStyle = g; ctx.fillRect(0,0,W,H);
+  if(!game.level) return;
+  const lvl = game.level;
+  const ox = Math.floor(game.cam.x - W/2), oy = Math.floor(game.cam.y - H/2);
+
+  // tiles
+  for(let y=0;y<lvl.h;y++){
+    for(let x=0;x<lvl.w;x++){
+      const ch = lvl.tiles[y][x];
+      const sx = x*TILE - ox, sy = y*TILE - oy;
+      if(sx+TILE<0 || sy+TILE<0 || sx>W || sy>H) continue;
+      if(ch==='#') ctx.drawImage(art.tile, sx, sy, TILE, TILE);
+    }
+  }
+
+  // platforms
+  for(const pl of lvl.platforms){
+    ctx.fillStyle = '#465a5a'; ctx.fillRect(pl.x - ox, pl.y - oy, pl.w, pl.h);
+    ctx.strokeStyle = '#233333'; ctx.strokeRect(pl.x - ox, pl.y - oy, pl.w, pl.h);
+  }
+
+  // coins / gems
+  for(const c of lvl.coins) if(!c.got) ctx.drawImage(art.coin, c.x - ox - 16, c.y - oy - 16, 32, 32);
+  for(const g of lvl.gems) if(!g.got) ctx.drawImage(art.gem, g.x - ox - 14, g.y - oy - 14, 28, 28);
+
+  // powerups
+  for(const pu of lvl.powerups) if(!pu.used) ctx.drawImage(art.power[pu.type], pu.x - ox - 14, pu.y - oy - 14, 28, 28);
+
+  // spikes
+  for(const s of lvl.spikes) ctx.drawImage(art.spike, s.x - ox, s.y - oy, s.w, s.h);
+
+  // enemies
+  for(const e of lvl.enemies) ctx.drawImage(art.enemy, e.x - ox - e.w/2, e.y - oy - e.h/2, e.w, e.h);
+
+  // flag
+  if(lvl.flag) ctx.drawImage(art.flag, lvl.flag.x - ox - 18, lvl.flag.y - oy - 44, 36, 48);
+
+  // player (animated frame)
+  const p = game.player;
+  const frameImg = art.playerFrames[game.playerAnim.frame];
+  ctx.drawImage(frameImg, p.x - ox - p.w/2 - 4, p.y - oy - p.h/2 - 4, p.w + 8, p.h + 8);
+
+  // shield indicator
+  if(p.shield){ ctx.strokeStyle='#9ef0c5'; ctx.lineWidth=3; ctx.beginPath(); ctx.ellipse(p.x - ox, p.y - oy, p.w/2+6, p.h/2+6, 0, 0, Math.PI*2); ctx.stroke(); }
+
+  // particles
+  for(const t of game.particles){
+    ctx.fillStyle = t.col; ctx.globalAlpha = Math.max(0, t.life/1.0);
+    ctx.beginPath(); ctx.arc(t.x - ox, t.y - oy, t.r, 0, Math.PI*2); ctx.fill(); ctx.globalAlpha = 1;
+  }
+
+  // HUD overlay if paused
+  if(!game.running){
+    ctx.fillStyle = 'rgba(2,6,12,0.45)'; ctx.fillRect(0,0,W,H);
+  }
+}
+
+// ============ 游戏流程 ============
+
+function startLevel(idx){
+  if(idx < 0) idx = 0;
+  if(idx >= LEVELS.length){ showPopup('恭喜！��通关所有关卡', `最终得分：${game.score}`, false); return; }
+  game.levelIndex = idx;
+  game.level = makeLevel(LEVELS[idx]);
+  game.player.x = game.level.playerStart.x; game.player.y = game.level.playerStart.y;
+  game.player.vx = 0; game.player.vy = 0; game.player.onGround = false; game.player.canDoubleJump = true; game.player.shield=false; game.player.boostTime=0;
+  game.cam.x = game.player.x; game.cam.y = game.player.y;
+  game.score = 0; hudLevel.textContent = idx+1; hudScore.textContent = game.score; hudItems.textContent = '无';
+  hud.style.display = 'block'; document.getElementById('pauseBtn').style.display='inline-block';
+  menu.style.display='none'; levelMenu.style.display='none'; tutorial.style.display='none'; popup.style.display='none';
+  game.running = true;
+  if(window.innerWidth < 900) touchUI.style.display='flex'; else touchUI.style.display='none';
+}
+
+function applyPower(type){
+  const p = game.player;
+  if(type==='B'){ p.boostTime = 4; hudItems.textContent='加速'; }
+  if(type==='D'){ p.canDoubleJump = true; hudItems.textContent='双跳补充'; }
+  if(type==='H'){ p.shield = true; hudItems.textContent='护盾'; }
+}
+
+function levelComplete(){
+  const leftCoins = game.level.coins.filter(c=>!c.got).length + game.level.gems.filter(g=>!g.got).length;
+  game.score += leftCoins * 5;
+  hudScore.textContent = game.score;
+  playTone(1200,'sine',0.2,0.11);
+  saveBest();
+  const nextExists = (game.levelIndex+1)<LEVELS.length;
+  showPopup('关卡完成！', `得分：${game.score}`, nextExists);
+  game.running = false;
+}
+
+function playerDie(){
+  playDie();
+  game.lives = Math.max(0, game.lives-1);
+  const start = game.level.playerStart;
+  game.player.x = start.x; game.player.y = start.y; game.player.vx=0; game.player.vy=0;
+  game.score = Math.max(0, game.score - 15); hudScore.textContent = game.score;
+  if(game.lives<=0){ saveBest(); showPopup('你死了', `最终得分：${game.score}`, false); game.running = false; }
+}
+
+function showPopup(title,msg,hasNext){
+  popup.style.display='block'; document.getElementById('popupTitle').textContent = title; document.getElementById('popupMsg').textContent = msg;
+  document.getElementById('nextBtn').style.display = hasNext ? 'inline-block' : 'none';
+}
+
+function showMenu(){ menu.style.display='block'; levelMenu.style.display='none'; tutorial.style.display='none'; popup.style.display='none'; hud.style.display='none'; touchUI.style.display='none'; document.getElementById('pauseBtn').style.display='none'; loadBest(); }
+
+function showLevelMenu(){
+  menu.style.display='none'; levelMenu.style.display='block';
+  const levelsList = document.getElementById('levelsList');
+  levelsList.innerHTML='';
+  LEVELS.forEach((L,i)=>{ const btn=document.createElement('button'); btn.textContent=`关卡 ${i+1}`; btn.onclick=()=>startLevel(i); btn.className='small'; levelsList.appendChild(btn); });
+}
+
+// ============ 存档 ============
+function loadBest(){ const key='xiaoyugan-yu.platformer.best.v2'; const v=localStorage.getItem(key); const best=v?parseInt(v,10):0; bestEl.textContent = best; return best; }
+function saveBest(){ const key='xiaoyugan-yu.platformer.best.v2'; const prev = loadBest(); if(game.score > prev){ localStorage.setItem(key,String(game.score)); bestEl.textContent = game.score; } }
+
+// ============ 初始化与循环 ============
+function loop(t){
+  const dt = Math.min(0.033, (t - lastTime) / 1000);
+  lastTime = t;
+  // jump buffer timer
+  if(input.jumpBuffer>0) input.jumpBuffer -= dt;
+  update(dt);
+  draw();
+  requestAnimationFrame(loop);
+}
+
+function init(){
+  createArts();
+  newGame();
+  requestAnimationFrame(loop);
+  showMenu();
+  function resize(){ const scale = Math.min(window.innerWidth - 36, 1200); canvas.style.width = Math.min(scale, 1200)+'px'; canvas.style.height = Math.min((canvas.height/canvas.width)*scale, 800)+'px'; }
+  window.addEventListener('resize', resize); resize();
+  // BGM auto start respect user action
+  document.addEventListener('click', ()=>{ if(!audioCtx) ensureAudio(); if(musicOn) startBgm(); }, {once:true});
+}
+
+init();
+
+</script>
+</body>
+</html>
